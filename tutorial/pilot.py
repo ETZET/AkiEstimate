@@ -35,9 +35,21 @@ XI=0.5
 VPVS=1
 SKIP=20
 
-# GLOBAL INPUT&OUTPUT PATH
+# CODE PATH
 source_code_path = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/AkiEstimate"
+# GLOBAL OUTPUT PATH
 output_path = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/AkiEstimate/tutorial/Result/GE_TEST"
+
+# INPUT PATH
+
+# litho reference file path much contain files list below
+# Litho reference model file: AFRRayleighPhase_LITHO1p0.csv, AFRLovePhase_LITHO1p0.csv
+# Litho reference model err file: AFRRayleighPhase_LITHO1p0_Err.csv, AFRLovePhase_LITHO1p0_Err.csv
+litho_ref_files = "/scratch/tolugboj_lab/Prj6_AfrTomography/6_ShareWithGroup/shareWithSiyu"
+connection_file = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/AkiEstimate/tutorial/data_Enting/GE_staconns.csv"
+# INPUT path must contain the x correlation result
+noise_xcorrelation_input = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/Extra_from_noise/CCF_auto/text_output"
+
 
 if not os.path.exists(output_path): os.makedirs(output_path)
 
@@ -46,17 +58,10 @@ if not os.path.exists(output_path): os.makedirs(output_path)
 ########################################
 
 def step0():
-    # INPUT for generate reference model
-    # litho reference file path much contain files list below
-    # Litho reference model file: AFRRayleighPhase_LITHO1p0.csv, AFRLovePhase_LITHO1p0.csv
-    # Litho reference model err file: AFRRayleighPhase_LITHO1p0_Err.csv, AFRLovePhase_LITHO1p0_Err.csv
-    litho_ref = "/scratch/tolugboj_lab/Prj6_AfrTomography/6_ShareWithGroup/shareWithSiyu"
-    connection_file = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/AkiEstimate/tutorial/data_Enting/GE_staconns.csv"
-
     # STEP 0
     # Generate reference model for inversion process
     ref_out = os.path.join(output_path,"reference")
-    os.system("python 00_get_reference.py --litho_ref {} --connection_file {} -o {}".format(litho_ref,\
+    os.system("python 00_get_reference.py --litho_ref {} --connection_file {} -o {}".format(litho_ref_files,\
                                                                                         connection_file,\
                                                                                         output_path))
     # Generate station list
@@ -66,8 +71,6 @@ def step0():
 
 def step01():
     # INPUT for create initial model
-    # INPUT path must contain the x correlation result
-    noise_xcorrelation_input = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/Extra_from_noise/CCF_auto/text_output"
     estimate_code_path = source_code_path+"/InitialPhase/scripts/estimate_joint_phase_amplitude.py"
     step01_output = output_path + "/01_Result"
     if not os.path.exists(step01_output): os.makedirs(step01_output)
@@ -113,16 +116,13 @@ def step01():
     
 def step02():
     # INPUT for fitting physical earth model to initial dispersion curve
-    noise_xcorrelation_input = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/Extra_from_noise/CCF_auto/text_output"
-    connection_file = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/AkiEstimate/tutorial/data_Enting/GE_staconns.csv"
-    litho_ref = output_path+"/litho_ref"
+    midpoint_litho_ref = output_path+"/litho_ref"
     optimize_code_path = source_code_path+"/InitialPhase/optimizer/optimizejoint"
     
     # Part 1 Generate Litho reference dispersion curve
     print("Generating Litho Reference")
-    if not os.path.exists(litho_ref): os.makedirs(litho_ref)
-    print('module load matlab; matlab -nodisplay -nodesktop -nosplash -r \"addpath "utils\" ;makemdlfiles_litho "{}" "{}";exit;\"'.format(connection_file,litho_ref))
-    os.system('module load matlab; matlab -nodisplay -nodesktop -nosplash -r \"addpath "utils\" ;makemdlfiles_litho "{}" "{}";exit;\"'.format(connection_file,litho_ref))
+    if not os.path.exists(midpoint_litho_ref): os.makedirs(midpoint_litho_ref)
+    os.system('module load matlab; matlab -nodisplay -nodesktop -nosplash -r \"addpath "utils\" ;makemdlfiles_litho "{}" "{}";exit;\"'.format(connection_file,midpoint_litho_ref))
     
     # Part 2 Fitting
     # parse station list to get station pairs
@@ -143,7 +143,7 @@ def step02():
         init_ray = output_path+"/01_Result/phase_{}.rayleigh".format(pair)
         init_love = output_path+"/01_Result/phase_{}.love".format(pair)
         pair_output = output_path+"/02_Result/Initial_{}/opt".format(pair)
-        pair_ref = "{}/{}.txt".format(litho_ref,pair)
+        pair_ref = "{}/{}.txt".format(midpoint_litho_ref,pair)
         os.system("mkdir -p {}".format(pair_output))
         
         # create slurm file
@@ -171,7 +171,6 @@ def step02():
         
         # submit the slurm job
         os.system("sbatch --export=pair={} temp.slurm".format(pair))
-        exit(0)
         # sleep to prevent exceeding job limit
         job_counter += 1
         if job_counter >= 100: 
@@ -184,7 +183,6 @@ def step02():
 
 def step03():
     # INPUT for fitting Bessel function
-    noise_xcorrelation_input = "/scratch/tolugboj_lab/Prj5_HarnomicRFTraces/Extra_from_noise/CCF_auto/text_output"
     step02_ref = output_path+"/02_Result"
     step03_output_path = output_path+"/03_Result"
     optimize_code_path = source_code_path+"/InitialPhase/optimizer/optimizejoint"
